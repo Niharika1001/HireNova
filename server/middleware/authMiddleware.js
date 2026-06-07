@@ -10,7 +10,7 @@ const protect = async (req, res, next) => {
       token = req.headers.authorization.split(' ')[1];
 
       // Decode and verify JWT
-      const decoded = jwt.verify(token, process.env.JWT_SECRET || 'hirenova_secret_key');
+      const decoded = jwt.verify(token, process.env.JWT_SECRET);
 
       // Bind user data (excluding password) to request context
       req.user = await User.findById(decoded.id).select('-password');

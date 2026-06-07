@@ -3,7 +3,7 @@ const jwt = require('jsonwebtoken');
 
 // Helper function to sign JWT tokens
 const generateToken = (id) => {
-  return jwt.sign({ id }, process.env.JWT_SECRET || 'hirenova_secret_key', {
+  return jwt.sign({ id }, process.env.JWT_SECRET, {
     expiresIn: '30d',
   });
 };
