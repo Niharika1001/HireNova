@@ -1,0 +1,277 @@
+import React, { useState, useEffect } from 'react';
+
+// Status badge class mapper
+const getStatusBadgeClass = (status) => {
+  switch (status) {
+    case 'Selected':
+      return 'badge-green';
+    case 'Rejected':
+      return 'badge-red';
+    case 'Reviewed':
+    case 'Under Review':
+      return 'badge-purple';
+    case 'Interview Scheduled':
+      return 'badge-orange';
+    case 'Applied':
+    default:
+      return 'badge-blue';
+  }
+};
+
+// UI status text helper
+const getStatusLabel = (status) => {
+  if (status === 'Reviewed') return 'Under Review';
+  return status;
+};
+
+export const ApplicationCard = ({ application, onDelete, isRecruiter = false, onStatusChange }) => {
+  const { _id, fullName, email, phone, resumeLink, coverLetter, jobId, createdAt, status: dbStatus } = application;
+  const [confirmDelete, setConfirmDelete] = useState(false);
+  const [displayStatus, setDisplayStatus] = useState(dbStatus);
+
+  // Sync display status with overrides for 'Reviewed' vs 'Interview Scheduled'
+  useEffect(() => {
+    if (dbStatus === 'Reviewed') {
+      const overrides = JSON.parse(localStorage.getItem('app_status_overrides') || '{}');
+      setDisplayStatus(overrides[_id] || 'Reviewed');
+    } else {
+      setDisplayStatus(dbStatus);
+    }
+  }, [dbStatus, _id]);
+
+  const handleDropdownChange = async (e) => {
+    const newStatus = e.target.value;
+    
+    // Save state overrides locally for the 'Interview Scheduled' exception
+    const overrides = JSON.parse(localStorage.getItem('app_status_overrides') || '{}');
+    if (newStatus === 'Interview Scheduled') {
+      overrides[_id] = 'Interview Scheduled';
+      localStorage.setItem('app_status_overrides', JSON.stringify(overrides));
+      // Notify parent using standard DB status 'Reviewed'
+      await onStatusChange(_id, 'Reviewed');
+      setDisplayStatus('Interview Scheduled');
+    } else {
+      delete overrides[_id];
+      localStorage.setItem('app_status_overrides', JSON.stringify(overrides));
+      // Notify parent with the database compliant status
+      await onStatusChange(_id, newStatus);
+      setDisplayStatus(newStatus);
+    }
+  };
+
+  const formatDate = (dateString) => {
+    const date = new Date(dateString);
+    return date.toLocaleDateString('en-US', {
+      month: 'short',
+      day: 'numeric',
+      year: 'numeric'
+    });
+  };
+
+  return (
+    <div className="glass-card" style={{
+      display: 'flex',
+      flexDirection: 'column',
+      justifyContent: 'space-between',
+      gap: '20px',
+      height: '100%',
+    }}>
+      <div>
+        {/* Header: Candidate details & Badge */}
+        <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', gap: '15px' }}>
+          <div>
+            <h3 style={{ fontSize: '18px', fontWeight: '700', color: 'var(--text-color)', fontFamily: 'var(--font-display)' }}>
+              {fullName}
+            </h3>
+            <span style={{ fontSize: '12px', color: 'var(--text-muted)' }}>
+              Applied on {formatDate(createdAt)}
+            </span>
+          </div>
+
+          <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'flex-end', gap: '6px' }}>
+            {jobId ? (
+              <div style={{ display: 'flex', gap: '4px', flexDirection: 'column', alignItems: 'flex-end' }}>
+                <span className="badge badge-primary" style={{ fontSize: '9px', padding: '2px 8px' }}>{jobId.jobType}</span>
+                {jobId.status !== 'Open' && (
+                  <span className={`badge ${jobId.status === 'Deleted' ? 'badge-red' : 'badge-orange'}`} style={{ fontSize: '9px', padding: '2px 8px' }}>
+                    {jobId.status === 'Deleted' ? 'Archived' : jobId.status} Job
+                  </span>
+                )}
+              </div>
+            ) : (
+              <span className="badge badge-red" style={{ fontSize: '9px', padding: '2px 8px' }}>Deleted Job</span>
+            )}
+            
+            {/* Status Badge (visible to candidates only, recruiters see select dropdown) */}
+            {!isRecruiter && (
+              <span className={`badge ${getStatusBadgeClass(displayStatus)}`} style={{ fontSize: '9px', padding: '2px 8px', marginTop: '6px' }}>
+                {getStatusLabel(displayStatus)}
+              </span>
+            )}
+          </div>
+        </div>
+
+        {/* Applied Position Info */}
+        {jobId ? (
+          <div style={{
+            background: jobId.status === 'Deleted' ? 'rgba(239, 68, 68, 0.01)' : 'rgba(255, 255, 255, 0.01)',
+            border: jobId.status === 'Deleted' ? '1px solid rgba(239, 68, 68, 0.15)' : '1px solid var(--card-border)',
+            borderRadius: '8px',
+            padding: '12px',
+            marginTop: '12px',
+          }}>
+            <span style={{ fontSize: '10px', color: 'var(--text-muted)', textTransform: 'uppercase', display: 'block', fontFamily: 'var(--font-display)', fontWeight: '600' }}>Position</span>
+            <span style={{ fontSize: '14px', fontWeight: '700', color: jobId.status === 'Deleted' ? 'var(--danger-color)' : 'var(--text-color)' }}>
+              {jobId.title} {jobId.status === 'Deleted' && '(Archived)'}
+            </span>
+            <span style={{ fontSize: '13px', color: 'var(--primary-color)', display: 'block', fontWeight: '600' }}>{jobId.company} &bull; {jobId.location}</span>
+          </div>
+        ) : (
+          <div style={{
+            background: 'rgba(239, 68, 68, 0.03)',
+            border: '1px solid rgba(239, 68, 68, 0.2)',
+            borderRadius: '8px',
+            padding: '12px',
+            marginTop: '12px',
+            color: 'var(--danger-color)',
+            fontSize: '13px',
+          }}>
+            The job listing this candidate applied to has been archived.
+          </div>
+        )}
+
+        {/* Contact details */}
+        <div style={{ display: 'flex', flexDirection: 'column', gap: '8px', marginTop: '15px', fontSize: '13px' }}>
+          <div style={{ display: 'flex', alignItems: 'center', gap: '8px', color: 'var(--text-muted)' }}>
+            <svg xmlns="http://www.w3.org/2000/svg" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><path d="M4 4h16c1.1 0 2 .9 2 2v12c0 1.1-.9 2-2 2H4c-1.1 0-2-.9-2-2V6c0-1.1.9-2 2-2z"></path><polyline points="22,6 12,13 2,6"></polyline></svg>
+            <a href={`mailto:${email}`} style={{ color: 'var(--text-color)', textDecoration: 'underline' }}>{email}</a>
+          </div>
+          <div style={{ display: 'flex', alignItems: 'center', gap: '8px', color: 'var(--text-muted)' }}>
+            <svg xmlns="http://www.w3.org/2000/svg" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><path d="M22 16.92v3a2 2 0 0 1-2.18 2 19.79 19.79 0 0 1-8.63-3.07 19.5 19.5 0 0 1-6-6 19.79 19.79 0 0 1-3.07-8.67A2 2 0 0 1 4.11 2h3a2 2 0 0 1 2 1.72 12.84 12.84 0 0 0 .7 2.81 2 2 0 0 1-.45 2.11L8.09 9.91a16 16 0 0 0 6 6l1.27-1.27a2 2 0 0 1 2.11-.45 12.84 12.84 0 0 0 2.81.7A2 2 0 0 1 22 16.92z"></path></svg>
+            <a href={`tel:${phone}`} style={{ color: 'var(--text-color)' }}>{phone}</a>
+          </div>
+        </div>
+
+        {/* Cover Letter */}
+        {coverLetter && (
+          <div style={{ marginTop: '15px' }}>
+            <span style={{ fontSize: '11px', color: 'var(--text-muted)', textTransform: 'uppercase', display: 'block', marginBottom: '4px', fontFamily: 'var(--font-display)', fontWeight: '600' }}>Cover Letter</span>
+            <p style={{
+              fontSize: '13px',
+              color: 'var(--text-muted)',
+              lineHeight: '1.5',
+              background: 'rgba(255, 255, 255, 0.01)',
+              borderLeft: '2px solid var(--accent-color)',
+              paddingLeft: '10px',
+              whiteSpace: 'pre-line',
+            }}>
+              {coverLetter}
+            </p>
+          </div>
+        )}
+
+        {/* Recruiter Status Dropdown Selector */}
+        {isRecruiter && onStatusChange && (
+          <div style={{
+            marginTop: '18px',
+            display: 'flex',
+            alignItems: 'center',
+            gap: '10px',
+            background: 'rgba(255,255,255,0.01)',
+            border: '1px solid var(--card-border)',
+            borderRadius: '8px',
+            padding: '8px 12px'
+          }}>
+            <span style={{ fontSize: '12px', color: 'var(--text-muted)', fontWeight: '600', fontFamily: 'var(--font-display)' }}>Pipeline:</span>
+            <select
+              value={displayStatus}
+              onChange={handleDropdownChange}
+              style={{
+                background: 'var(--bg-color)',
+                border: '1px solid var(--card-border)',
+                borderRadius: '4px',
+                padding: '4px 8px',
+                fontSize: '12px',
+                color: 'var(--text-color)',
+                cursor: 'pointer',
+                flex: 1,
+                outline: 'none'
+              }}
+            >
+              <option value="Applied">Applied</option>
+              <option value="Reviewed">Under Review</option>
+              <option value="Interview Scheduled">Interview Scheduled</option>
+              <option value="Selected">Selected</option>
+              <option value="Rejected">Rejected</option>
+            </select>
+          </div>
+        )}
+      </div>
+
+      {/* Action buttons */}
+      <div style={{
+        display: 'flex',
+        justifyContent: 'space-between',
+        alignItems: 'center',
+        marginTop: '15px',
+        borderTop: '1px solid rgba(255,255,255,0.05)',
+        paddingTop: '15px',
+        position: 'relative'
+      }}>
+        {confirmDelete ? (
+          <div style={{
+            display: 'flex',
+            width: '100%',
+            justifyContent: 'space-between',
+            alignItems: 'center',
+            background: 'rgba(239, 68, 68, 0.08)',
+            padding: '8px 12px',
+            borderRadius: '6px',
+            border: '1px solid rgba(239, 68, 68, 0.25)',
+          }}>
+            <span style={{ fontSize: '12px', color: 'var(--danger-color)', fontWeight: '600' }}>Confirm delete?</span>
+            <div style={{ display: 'flex', gap: '8px' }}>
+              <button 
+                type="button"
+                onClick={() => setConfirmDelete(false)} 
+                className="btn-secondary" 
+                style={{ padding: '4px 10px', fontSize: '11px' }}
+              >
+                Cancel
+              </button>
+              <button 
+                type="button"
+                onClick={() => {
+                  onDelete(_id);
+                  setConfirmDelete(false);
+                }} 
+                className="btn-danger" 
+                style={{ padding: '4px 10px', fontSize: '11px', background: 'var(--danger-color)', color: '#fff' }}
+              >
+                Delete
+              </button>
+            </div>
+          </div>
+        ) : (
+          <>
+            <a href={resumeLink} target="_blank" rel="noopener noreferrer">
+              <button className="btn-secondary" style={{ padding: '8px 12px', fontSize: '12px' }}>
+                <svg xmlns="http://www.w3.org/2000/svg" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" style={{ marginRight: '6px' }}><path d="M18 13v6a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V8a2 2 0 0 1 2-2h6"></path><polyline points="15 3 21 3 21 9"></polyline><line x1="10" y1="14" x2="21" y2="3"></line></svg>
+                View Resume
+              </button>
+            </a>
+
+            {isRecruiter && onDelete && (
+              <button onClick={() => setConfirmDelete(true)} className="btn-danger" style={{ padding: '8px 12px', fontSize: '12px' }}>
+                <svg xmlns="http://www.w3.org/2000/svg" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" style={{ marginRight: '4px' }}><polyline points="3 6 5 6 21 6"></polyline><path d="M19 6v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6m3 0V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2"></path></svg>
+                Delete
+              </button>
+            )}
+          </>
+        )}
+      </div>
+    </div>
+  );
+};
+
+export default ApplicationCard;
