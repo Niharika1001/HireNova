@@ -131,7 +131,9 @@ export const JobDetails = () => {
         resumeLink: cleanedResumeLink
       });
       
-      addToast('Application submitted successfully', 'success');
+      addToast('Application Submitted Successfully', 'success');
+      addToast('Recruiter Notified', 'success');
+      addToast('Candidate Notified', 'success');
       setFormSuccess(true);
       setFormData({
         fullName: '',

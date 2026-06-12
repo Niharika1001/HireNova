@@ -1,6 +1,11 @@
 const Application = require('../models/Application');
 const Job = require('../models/Job');
 const User = require('../models/User');
+const {
+  sendRecruiterNotification,
+  sendCandidateConfirmation,
+  sendStatusUpdateEmail
+} = require('../utils/emailService');
 
 // @desc    Get all job applications (Role-based access)
 // @route   GET /api/applications
@@ -87,6 +92,41 @@ const createApplication = async (req, res, next) => {
       status: 'Applied' // Default state
     });
 
+    // Trigger email notifications asynchronously (error-safe)
+    (async () => {
+      try {
+        const recruiter = await User.findById(job.recruiterId);
+        if (recruiter) {
+          const dateStr = new Date(application.createdAt).toLocaleDateString('en-US', {
+            month: 'short',
+            day: 'numeric',
+            year: 'numeric'
+          });
+
+          // Send notification email to the recruiter
+          await sendRecruiterNotification(
+            recruiter.email,
+            recruiter.name,
+            application.fullName,
+            application.email,
+            job.title,
+            dateStr
+          );
+
+          // Send confirmation email to the candidate
+          await sendCandidateConfirmation(
+            application.email,
+            application.fullName,
+            job.title,
+            job.company,
+            dateStr
+          );
+        }
+      } catch (emailErr) {
+        console.error('Asynchronous application notification flow failed:', emailErr);
+      }
+    })();
+
     res.status(201).json(application);
   } catch (error) {
     next(error);
@@ -141,8 +181,35 @@ const updateApplicationStatus = async (req, res, next) => {
       throw new Error('Permission denied. You do not own the job listing for this application.');
     }
 
+    const previousStatus = application.status;
     application.status = status;
     await application.save();
+
+    // Trigger status update email notification asynchronously (error-safe)
+    (async () => {
+      try {
+        const candidate = await User.findById(application.candidateId);
+        if (candidate) {
+          const dateStr = new Date().toLocaleDateString('en-US', {
+            month: 'short',
+            day: 'numeric',
+            year: 'numeric'
+          });
+
+          await sendStatusUpdateEmail(
+            candidate.email,
+            candidate.name,
+            application.jobId.title,
+            application.jobId.company,
+            previousStatus,
+            status,
+            dateStr
+          );
+        }
+      } catch (emailErr) {
+        console.error('Asynchronous status update notification flow failed:', emailErr);
+      }
+    })();
 
     res.status(200).json(application);
   } catch (error) {

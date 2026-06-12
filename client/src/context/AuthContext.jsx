@@ -41,9 +41,15 @@ export const AuthProvider = ({ children }) => {
     loadUser();
   }, [token]);
 
-  // Log in existing users
+  // Log in existing users (initiates OTP flow)
   const login = async (email, password) => {
     const response = await api.post('/api/auth/login', { email, password });
+    return response.data;
+  };
+
+  // Verify OTP to complete login and retrieve JWT session
+  const verifyOtp = async (email, otp) => {
+    const response = await api.post('/api/auth/verify-otp', { email, otp });
     setToken(response.data.token);
     setUser({
       _id: response.data._id,
@@ -67,7 +73,7 @@ export const AuthProvider = ({ children }) => {
   };
 
   return (
-    <AuthContext.Provider value={{ user, token, loading, login, signup, logout }}>
+    <AuthContext.Provider value={{ user, token, loading, login, verifyOtp, signup, logout }}>
       {children}
     </AuthContext.Provider>
   );

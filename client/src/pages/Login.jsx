@@ -1,11 +1,13 @@
 import React, { useState, useEffect } from 'react';
 import { useNavigate, Link, useLocation } from 'react-router-dom';
 import { useAuth } from '../context/AuthContext';
+import { useToast } from '../context/ToastContext';
 
 export const Login = () => {
   const navigate = useNavigate();
   const location = useLocation();
-  const { login } = useAuth();
+  const { login, verifyOtp } = useAuth();
+  const { addToast } = useToast();
 
   const [formData, setFormData] = useState({
     email: '',
@@ -15,6 +17,9 @@ export const Login = () => {
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState(null);
   const [successMsg, setSuccessMsg] = useState(null);
+
+  const [otpMode, setOtpMode] = useState(false);
+  const [otp, setOtp] = useState('');
 
   // Extract redirect state message (e.g. from signup success)
   useEffect(() => {
@@ -47,14 +52,46 @@ export const Login = () => {
     setLoading(true);
     try {
       const data = await login(email, password);
+      if (data.otpSent) {
+        setOtpMode(true);
+        addToast('OTP Sent Successfully', 'success');
+      } else {
+        // Fallback standard redirect
+        if (data.role === 'Recruiter') {
+          navigate('/dashboard');
+        } else {
+          navigate('/jobs');
+        }
+      }
+    } catch (err) {
+      console.error('Login submit error:', err);
+      setError(err.response?.data?.message || 'Authentication failed. Please verify credentials.');
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  const handleOtpSubmit = async (e) => {
+    e.preventDefault();
+    setError(null);
+
+    if (!otp || otp.length !== 6) {
+      setError('Please enter a valid 6-digit OTP code.');
+      return;
+    }
+
+    setLoading(true);
+    try {
+      const data = await verifyOtp(formData.email, otp);
+      addToast('OTP Verified Successfully', 'success');
       if (data.role === 'Recruiter') {
         navigate('/dashboard');
       } else {
         navigate('/jobs');
       }
     } catch (err) {
-      console.error('Login submit error:', err);
-      setError(err.response?.data?.message || 'Authentication failed. Please verify credentials.');
+      console.error('OTP verification error:', err);
+      setError(err.response?.data?.message || 'Invalid or expired OTP code.');
     } finally {
       setLoading(false);
     }
@@ -154,10 +191,20 @@ export const Login = () => {
       }}>
         <div style={{ width: '100%', maxWidth: '380px' }}>
           <h3 style={{ fontSize: '26px', fontWeight: '800', fontFamily: 'var(--font-display)', marginBottom: '8px' }}>
-            Welcome <span className="gradient-text-accent">Back</span>
+            {otpMode ? (
+              <>
+                Enter <span className="gradient-text-accent">OTP</span>
+              </>
+            ) : (
+              <>
+                Welcome <span className="gradient-text-accent">Back</span>
+              </>
+            )}
           </h3>
           <p style={{ color: 'var(--text-muted)', fontSize: '14px', marginBottom: '30px' }}>
-            Sign in to access your recruitment workspace.
+            {otpMode 
+              ? `We've sent a 6-digit code to ${formData.email}` 
+              : 'Sign in to access your recruitment workspace.'}
           </p>
 
           {successMsg && (
@@ -198,42 +245,82 @@ export const Login = () => {
             </div>
           )}
 
-          <form onSubmit={handleSubmit} style={{ display: 'flex', flexDirection: 'column', gap: '20px' }}>
-            <div className="form-group" style={{ marginBottom: 0 }}>
-              <label className="form-label">Email Address</label>
-              <input
-                type="email"
-                name="email"
-                className="glass-input"
-                placeholder="e.g. recruit@stripe.com"
-                value={formData.email}
-                onChange={handleInputChange}
-                required
-              />
-            </div>
+          {otpMode ? (
+            <form onSubmit={handleOtpSubmit} style={{ display: 'flex', flexDirection: 'column', gap: '20px' }}>
+              <div className="form-group" style={{ marginBottom: 0 }}>
+                <label className="form-label">Verification Code (OTP)</label>
+                <input
+                  type="text"
+                  maxLength="6"
+                  placeholder="••••••"
+                  className="glass-input"
+                  value={otp}
+                  onChange={(e) => setOtp(e.target.value.replace(/\D/g, ''))}
+                  style={{ letterSpacing: '8px', fontSize: '20px', textAlign: 'center', fontWeight: '700' }}
+                  required
+                />
+              </div>
 
-            <div className="form-group" style={{ marginBottom: 0 }}>
-              <label className="form-label">Password</label>
-              <input
-                type="password"
-                name="password"
-                className="glass-input"
-                placeholder="••••••••"
-                value={formData.password}
-                onChange={handleInputChange}
-                required
-              />
-            </div>
+              <button
+                type="submit"
+                disabled={loading}
+                className="btn-primary"
+                style={{ width: '100%', padding: '14px', marginTop: '10px' }}
+              >
+                {loading ? 'Verifying Code...' : 'Verify & Sign In'}
+              </button>
 
-            <button
-              type="submit"
-              disabled={loading}
-              className="btn-primary"
-              style={{ width: '100%', padding: '14px', marginTop: '10px' }}
-            >
-              {loading ? 'Signing In...' : 'Sign In'}
-            </button>
-          </form>
+              <button
+                type="button"
+                onClick={() => {
+                  setOtpMode(false);
+                  setOtp('');
+                  setError(null);
+                }}
+                className="btn-secondary"
+                style={{ width: '100%', padding: '12px', border: 'none', background: 'transparent', color: 'var(--text-muted)' }}
+              >
+                Back to Login credentials
+              </button>
+            </form>
+          ) : (
+            <form onSubmit={handleSubmit} style={{ display: 'flex', flexDirection: 'column', gap: '20px' }}>
+              <div className="form-group" style={{ marginBottom: 0 }}>
+                <label className="form-label">Email Address</label>
+                <input
+                  type="email"
+                  name="email"
+                  className="glass-input"
+                  placeholder="e.g. recruit@stripe.com"
+                  value={formData.email}
+                  onChange={handleInputChange}
+                  required
+                />
+              </div>
+
+              <div className="form-group" style={{ marginBottom: 0 }}>
+                <label className="form-label">Password</label>
+                <input
+                  type="password"
+                  name="password"
+                  className="glass-input"
+                  placeholder="••••••••"
+                  value={formData.password}
+                  onChange={handleInputChange}
+                  required
+                />
+              </div>
+
+              <button
+                type="submit"
+                disabled={loading}
+                className="btn-primary"
+                style={{ width: '100%', padding: '14px', marginTop: '10px' }}
+              >
+                {loading ? 'Signing In...' : 'Sign In'}
+              </button>
+            </form>
+          )}
 
           <div style={{ marginTop: '30px', textAlign: 'center', fontSize: '14px', color: 'var(--text-muted)' }}>
             New to HireNova?{' '}

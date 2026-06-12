@@ -51,8 +51,9 @@ export const Signup = () => {
       const { name, email, password, role } = formData;
       await signup(name, email, password, role);
       
-      // Success toast
+      // Success toasts
       addToast('Account created successfully', 'success');
+      addToast('Welcome Email Sent', 'success');
       
       // Redirect to login page with success notification state
       navigate('/login', { 

@@ -1,6 +1,7 @@
 import React, { useState, useEffect } from 'react';
 import { getApplications, deleteApplication, updateApplicationStatus } from '../services/api';
 import { useAuth } from '../context/AuthContext';
+import { useToast } from '../context/ToastContext';
 import ApplicationCard from '../components/ApplicationCard';
 import { ApplicationCardSkeleton } from '../components/Loader';
 import EmptyState from '../components/EmptyState';
@@ -8,6 +9,7 @@ import EmptyState from '../components/EmptyState';
 // Applications Management / Applied Roles page
 export const Applications = () => {
   const { user } = useAuth();
+  const { addToast } = useToast();
   const [applications, setApplications] = useState([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState(null);
@@ -42,10 +44,10 @@ export const Applications = () => {
         app._id === appId ? { ...app, status: newStatus } : app
       ));
       
-      alert(`Candidate status updated to ${newStatus}.`);
+      addToast('Status Updated Successfully', 'success');
     } catch (err) {
       console.error('Error updating application status:', err);
-      alert('Failed to update application status: ' + (err.response?.data?.message || err.message));
+      addToast('Failed to update status: ' + (err.response?.data?.message || err.message), 'error');
     }
   };
 

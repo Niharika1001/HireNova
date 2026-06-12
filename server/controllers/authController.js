@@ -1,5 +1,7 @@
 const User = require('../models/User');
 const jwt = require('jsonwebtoken');
+const { generateOTP, verifyOTP } = require('../utils/otpService');
+const { sendWelcomeEmail, sendOTPEmail } = require('../utils/emailService');
 
 // Helper function to sign JWT tokens
 const generateToken = (id) => {
@@ -34,6 +36,11 @@ const registerUser = async (req, res, next) => {
       role
     });
 
+    // Send Welcome Email asynchronously (error-safe)
+    sendWelcomeEmail(user.email, user.name).catch((err) => {
+      console.error('Welcome email asynchronous delivery failed:', err);
+    });
+
     res.status(201).json({
       _id: user._id,
       name: user.name,
@@ -46,7 +53,7 @@ const registerUser = async (req, res, next) => {
   }
 };
 
-// @desc    Authenticate user & retrieve token
+// @desc    Authenticate user & dispatch OTP verification
 // @route   POST /api/auth/login
 // @access  Public
 const loginUser = async (req, res, next) => {
@@ -69,6 +76,52 @@ const loginUser = async (req, res, next) => {
     if (!isMatch) {
       res.status(401);
       throw new Error('Invalid email or password');
+    }
+
+    // Generate and store OTP code
+    const otp = await generateOTP(email);
+
+    // Send OTP email (error-safe)
+    sendOTPEmail(user.email, otp).catch((err) => {
+      console.error('OTP email asynchronous delivery failed:', err);
+    });
+
+    // Output code to server log for developer testing convenience
+    console.log(`\n==================================================`);
+    console.log(`[DEVELOPER NOTICE] Generated OTP for ${user.email}: ${otp}`);
+    console.log(`==================================================\n`);
+
+    res.status(200).json({
+      otpSent: true,
+      email: user.email
+    });
+  } catch (error) {
+    next(error);
+  }
+};
+
+// @desc    Verify OTP and return authentication details
+// @route   POST /api/auth/verify-otp
+// @access  Public
+const verifyOTPController = async (req, res, next) => {
+  try {
+    const { email, otp } = req.body;
+
+    if (!email || !otp) {
+      res.status(400);
+      throw new Error('Please enter both email and OTP verification code');
+    }
+
+    const isValid = await verifyOTP(email, otp);
+    if (!isValid) {
+      res.status(401);
+      throw new Error('Invalid or expired OTP verification code');
+    }
+
+    const user = await User.findOne({ email });
+    if (!user) {
+      res.status(404);
+      throw new Error('Associated user account was not found');
     }
 
     res.status(200).json({
@@ -102,5 +155,7 @@ const getUserProfile = async (req, res, next) => {
 module.exports = {
   registerUser,
   loginUser,
+  verifyOTPController,
   getUserProfile
 };
+
