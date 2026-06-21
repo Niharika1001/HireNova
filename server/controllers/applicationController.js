@@ -1,10 +1,12 @@
 const Application = require('../models/Application');
 const Job = require('../models/Job');
 const User = require('../models/User');
+const { logActivity } = require('../utils/activityLogger');
 const {
   sendRecruiterNotification,
   sendCandidateConfirmation,
-  sendStatusUpdateEmail
+  sendStatusUpdateEmail,
+  sendHiringDecisionEmail
 } = require('../utils/emailService');
 
 // @desc    Get all job applications (Role-based access)
@@ -22,7 +24,23 @@ const getAllApplications = async (req, res, next) => {
       const recruiterJobs = await Job.find({ recruiterId: userId }).select('_id');
       const jobIds = recruiterJobs.map(job => job._id);
 
-      applications = await Application.find({ jobId: { $in: jobIds } })
+      const { jobId, status, search } = req.query;
+      let query = { jobId: { $in: jobIds } };
+
+      if (jobId) {
+        query.jobId = jobId;
+      }
+      if (status) {
+        query.status = status;
+      }
+      if (search) {
+        query.$or = [
+          { fullName: { $regex: search, $options: 'i' } },
+          { email: { $regex: search, $options: 'i' } }
+        ];
+      }
+
+      applications = await Application.find(query)
         .populate('jobId', 'title company location jobType status')
         .sort({ createdAt: -1 });
     } else if (userRole === 'Candidate') {
@@ -185,6 +203,12 @@ const updateApplicationStatus = async (req, res, next) => {
     application.status = status;
     await application.save();
 
+    // Log Activity
+    let activityMsg = `${status} ${application.fullName}`;
+    if (status === 'Hired') activityMsg = `Hired ${application.fullName}`;
+    if (status === 'Rejected') activityMsg = `Rejected ${application.fullName}`;
+    await logActivity(req.user._id, activityMsg);
+
     // Trigger status update email notification asynchronously (error-safe)
     (async () => {
       try {
@@ -196,15 +220,25 @@ const updateApplicationStatus = async (req, res, next) => {
             year: 'numeric'
           });
 
-          await sendStatusUpdateEmail(
-            candidate.email,
-            candidate.name,
-            application.jobId.title,
-            application.jobId.company,
-            previousStatus,
-            status,
-            dateStr
-          );
+          if (status === 'Hired' || status === 'Rejected') {
+            await sendHiringDecisionEmail(
+              candidate.email,
+              candidate.name,
+              application.jobId.title,
+              application.jobId.company,
+              status
+            );
+          } else {
+            await sendStatusUpdateEmail(
+              candidate.email,
+              candidate.name,
+              application.jobId.title,
+              application.jobId.company,
+              previousStatus,
+              status,
+              dateStr
+            );
+          }
         }
       } catch (emailErr) {
         console.error('Asynchronous status update notification flow failed:', emailErr);
@@ -217,9 +251,130 @@ const updateApplicationStatus = async (req, res, next) => {
   }
 };
 
+// @desc    Export applications as CSV (Recruiter Only)
+// @route   GET /api/applications/export
+// @access  Private (Recruiter)
+const exportApplications = async (req, res, next) => {
+  try {
+    const recruiterJobs = await Job.find({ recruiterId: req.user._id }).select('_id');
+    const jobIds = recruiterJobs.map(job => job._id);
+
+    const { jobId } = req.query;
+    let query = { jobId: { $in: jobIds } };
+    if (jobId) {
+      query.jobId = jobId;
+    }
+
+    const applications = await Application.find(query).populate('jobId');
+
+    let csvContent = 'Name,Email,Phone,Status,Applied Date\n';
+    applications.forEach(app => {
+      const dateStr = new Date(app.createdAt).toLocaleDateString('en-US');
+      const name = `"${app.fullName.replace(/"/g, '""')}"`;
+      const email = `"${app.email.replace(/"/g, '""')}"`;
+      const phone = `"${app.phone.replace(/"/g, '""')}"`;
+      const status = `"${app.status.replace(/"/g, '""')}"`;
+      csvContent += `${name},${email},${phone},${status},${dateStr}\n`;
+    });
+
+    res.setHeader('Content-Type', 'text/csv');
+    res.setHeader('Content-Disposition', 'attachment; filename=applicants.csv');
+    res.status(200).send(csvContent);
+  } catch (error) {
+    next(error);
+  }
+};
+
+// @desc    Bulk update application status (Recruiter Only)
+// @route   POST /api/applications/bulk-status
+// @access  Private (Recruiter)
+const bulkUpdateStatus = async (req, res, next) => {
+  try {
+    const { ids, status } = req.body;
+
+    if (!ids || !Array.isArray(ids) || ids.length === 0 || !status) {
+      res.status(400);
+      throw new Error('Please provide an array of application ids and target status');
+    }
+
+    const recruiterJobs = await Job.find({ recruiterId: req.user._id }).select('_id');
+    const jobIds = recruiterJobs.map(job => job._id);
+
+    const applications = await Application.find({
+      _id: { $in: ids },
+      jobId: { $in: jobIds }
+    }).populate('jobId');
+
+    if (applications.length === 0) {
+      res.status(400);
+      throw new Error('No matching applications found or permission denied');
+    }
+
+    const updatedApplications = [];
+
+    for (let app of applications) {
+      const previousStatus = app.status;
+      app.status = status;
+      await app.save();
+      updatedApplications.push(app);
+
+      // Log Activity
+      let message = `${status} ${app.fullName}`;
+      if (status === 'Hired') message = `Hired ${app.fullName}`;
+      if (status === 'Rejected') message = `Rejected ${app.fullName}`;
+      await logActivity(req.user._id, message);
+
+      // Send Email asynchronously
+      (async () => {
+        try {
+          const candidate = await User.findById(app.candidateId);
+          if (candidate) {
+            const dateStr = new Date().toLocaleDateString('en-US', {
+              month: 'short',
+              day: 'numeric',
+              year: 'numeric'
+            });
+
+            if (status === 'Hired' || status === 'Rejected') {
+              await sendHiringDecisionEmail(
+                candidate.email,
+                candidate.name,
+                app.jobId.title,
+                app.jobId.company,
+                status
+              );
+            } else {
+              await sendStatusUpdateEmail(
+                candidate.email,
+                candidate.name,
+                app.jobId.title,
+                app.jobId.company,
+                previousStatus,
+                status,
+                dateStr
+              );
+            }
+          }
+        } catch (emailErr) {
+          console.error(`Bulk update email failed for candidate ${app.fullName}:`, emailErr);
+        }
+      })();
+    }
+
+    res.status(200).json({
+      message: `Successfully updated ${updatedApplications.length} applications to ${status}`,
+      applications: updatedApplications
+    });
+  } catch (error) {
+    next(error);
+  }
+};
+
 module.exports = {
   getAllApplications,
   createApplication,
   deleteApplication,
-  updateApplicationStatus
+  updateApplicationStatus,
+  exportApplications,
+  bulkUpdateStatus
 };

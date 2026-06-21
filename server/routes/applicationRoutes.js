@@ -4,7 +4,9 @@ const {
   getAllApplications,
   createApplication,
   deleteApplication,
-  updateApplicationStatus
+  updateApplicationStatus,
+  exportApplications,
+  bulkUpdateStatus
 } = require('../controllers/applicationController');
 const { protect, authorizeRole } = require('../middleware/authMiddleware');
 
@@ -12,6 +14,14 @@ const { protect, authorizeRole } = require('../middleware/authMiddleware');
 router.route('/')
   .get(protect, getAllApplications)
   .post(protect, authorizeRole('Candidate'), createApplication);
+
+// Export applications to CSV (Recruiters only)
+router.route('/export')
+  .get(protect, authorizeRole('Recruiter'), exportApplications);
+
+// Bulk update application status (Recruiters only)
+router.route('/bulk-status')
+  .post(protect, authorizeRole('Recruiter'), bulkUpdateStatus);
 
 // Delete application (Recruiters only)
 router.route('/:id')

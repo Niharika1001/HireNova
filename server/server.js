@@ -24,6 +24,9 @@ app.use('/api/jobs', jobRoutes);
 app.use('/api/applications', applicationRoutes);
 app.use('/api/saved-jobs', require('./routes/savedJobRoutes'));
 app.use('/api/profile', require('./routes/profileRoutes'));
+app.use('/api/notes', require('./routes/noteRoutes'));
+app.use('/api/interviews', require('./routes/interviewRoutes'));
+app.use('/api/activities', require('./routes/activityRoutes'));
 
 // Secure dashboard stats endpoint (only Recruiters can pull their analytics)
 app.get('/api/dashboard/stats', protect, authorizeRole('Recruiter'), getDashboardStats);

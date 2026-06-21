@@ -2,6 +2,17 @@ import React, { useState, useEffect } from 'react';
 import { getJobs, getApplications } from '../services/api';
 import { useAuth } from '../context/AuthContext';
 import { Loader } from '../components/Loader';
+import { 
+  ResponsiveContainer, 
+  BarChart, 
+  Bar, 
+  XAxis, 
+  YAxis, 
+  Tooltip, 
+  CartesianGrid, 
+  Cell, 
+  LabelList 
+} from 'recharts';
 
 export const Analytics = () => {
   const { user } = useAuth();
@@ -31,65 +42,56 @@ export const Analytics = () => {
 
   if (loading) return <Loader />;
 
-  // 1. Open Positions
-  const openPositionsCount = jobs.filter(j => j.status === 'Open').length;
+  // 1. Job metrics
+  const totalJobsCount = jobs.filter(j => j.status !== 'Deleted').length;
+  const activeJobsCount = jobs.filter(j => j.status === 'Open').length;
+  const closedJobsCount = jobs.filter(j => j.status === 'Closed').length;
 
-  // 2. Applications This Month
-  const currentMonth = new Date().getMonth();
-  const currentYear = new Date().getFullYear();
-  const appsThisMonth = applications.filter(app => {
-    const date = new Date(app.createdAt);
-    return date.getMonth() === currentMonth && date.getFullYear() === currentYear;
-  }).length;
+  // 2. Candidate & Status metrics
+  const totalApplicantsCount = applications.length;
+  const shortlistedCount = applications.filter(app => app.status === 'Shortlisted').length;
+  const rejectedCount = applications.filter(app => app.status === 'Rejected').length;
+  const hiredCount = applications.filter(app => app.status === 'Hired').length;
+  
+  // Pipeline stages
+  const appliedCount = applications.filter(app => app.status === 'Applied').length;
+  const underReviewCount = applications.filter(app => app.status === 'Under Review').length;
+  const interviewingCount = applications.filter(app => app.status === 'Interview Scheduled').length;
 
-  // 3. Most Applied Job
+  // 3. Top Performing Job (highest applications count)
   const jobAppCounts = {};
   applications.forEach(app => {
-    const title = app.jobId?.title || 'Unknown Position';
-    jobAppCounts[title] = (jobAppCounts[title] || 0) + 1;
-  });
-
-  let mostAppliedJobTitle = 'N/A';
-  let mostAppliedJobCount = 0;
-  Object.keys(jobAppCounts).forEach(title => {
-    if (jobAppCounts[title] > mostAppliedJobCount) {
-      mostAppliedJobTitle = title;
-      mostAppliedJobCount = jobAppCounts[title];
+    const job = app.jobId;
+    if (job) {
+      const jobId = job._id;
+      if (!jobAppCounts[jobId]) {
+        jobAppCounts[jobId] = { title: job.title, count: 0 };
+      }
+      jobAppCounts[jobId].count++;
     }
   });
 
-  // 4. Hiring Success Rate (Selected / Total processed apps, e.g. Selected + Rejected)
-  const selectedCount = applications.filter(app => app.status === 'Selected').length;
-  const rejectedCount = applications.filter(app => app.status === 'Rejected').length;
-  const processedCount = selectedCount + rejectedCount;
-  const hiringSuccessRate = processedCount > 0 ? Math.round((selectedCount / processedCount) * 100) : 0;
-
-  // 5. Monthly Trend points (Mocking points based on real month distribution)
-  const monthNames = ['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec'];
-  const monthlyCounts = Array(12).fill(0);
-  applications.forEach(app => {
-    const month = new Date(app.createdAt).getMonth();
-    monthlyCounts[month]++;
+  let topJobTitle = 'N/A';
+  let topJobCount = 0;
+  Object.values(jobAppCounts).forEach(item => {
+    if (item.count > topJobCount) {
+      topJobTitle = item.title;
+      topJobCount = item.count;
+    }
   });
 
-  // Take the last 6 months to construct the trend line
-  const trendLabels = [];
-  const trendValues = [];
-  for (let i = 5; i >= 0; i--) {
-    const m = (currentMonth - i + 12) % 12;
-    trendLabels.push(monthNames[m]);
-    trendValues.push(monthlyCounts[m]);
-  }
+  // Funnel data array for Recharts
+  const funnelData = [
+    { name: 'Applied', value: appliedCount, color: '#00D4FF' },
+    { name: 'Under Review', value: underReviewCount, color: '#8B5CF6' },
+    { name: 'Shortlisted', value: shortlistedCount, color: '#3B82F6' },
+    { name: 'Interview Scheduled', value: interviewingCount, color: '#F59E0B' },
+    { name: 'Hired', value: hiredCount, color: '#22C55E' }
+  ];
 
-  // Calculate SVG line points
-  const maxVal = Math.max(...trendValues, 5); // default min height scale of 5
-  const svgWidth = 500;
-  const svgHeight = 160;
-  const points = trendValues.map((val, idx) => {
-    const x = (idx / 5) * (svgWidth - 40) + 20;
-    const y = svgHeight - (val / maxVal) * (svgHeight - 40) - 20;
-    return `${x},${y}`;
-  }).join(' ');
+  // Success rate helper
+  const processedCount = shortlistedCount + rejectedCount + hiredCount;
+  const successRate = processedCount > 0 ? Math.round((hiredCount / (hiredCount + rejectedCount || 1)) * 100) : 0;
 
   return (
     <div style={{ display: 'flex', flexDirection: 'column', gap: '35px', paddingBottom: '60px' }}>
@@ -97,196 +99,220 @@ export const Analytics = () => {
       {/* Page Header */}
       <div>
         <h1 style={{ fontSize: '32px', fontWeight: '800', fontFamily: 'var(--font-display)', marginBottom: '8px' }}>
-          Recruiting <span className="gradient-text-accent">Analytics</span>
+          Recruitment <span className="gradient-text-accent">Analytics</span>
         </h1>
         <p style={{ color: 'var(--text-muted)', fontSize: '14px' }}>
-          Analyze recruitment performance, monthly pipeline metrics, and hiring ratios.
+          Analyze hiring pipelines, track conversion funnel metrics, and monitor job post performance.
         </p>
       </div>
 
       {/* Stats Cards grid */}
       <div style={{
         display: 'grid',
-        gridTemplateColumns: 'repeat(auto-fit, minmax(220px, 1fr))',
-        gap: '24px'
+        gridTemplateColumns: 'repeat(auto-fit, minmax(200px, 1fr))',
+        gap: '20px'
       }}>
+        {/* Total Jobs */}
         <div className="glass-card" style={{ display: 'flex', flexDirection: 'column', gap: '8px' }}>
-          <span className="metric-label" style={{ fontSize: '11px', color: 'var(--text-muted)', textTransform: 'uppercase', letterSpacing: '0.08em', fontWeight: '700', fontFamily: 'var(--font-display)' }}>
-            Applications This Month
+          <span style={{ fontSize: '10px', color: 'var(--text-muted)', textTransform: 'uppercase', letterSpacing: '0.08em', fontWeight: '700' }}>
+            Total Jobs
           </span>
-          <h2 className="metric-value" style={{ fontSize: '36px', fontWeight: '800', color: 'var(--primary-color)' }}>
-            {appsThisMonth}
+          <h2 style={{ fontSize: '32px', fontWeight: '800', color: 'var(--text-color)' }}>
+            {totalJobsCount}
           </h2>
-          <span style={{ fontSize: '11px', color: 'var(--text-muted)' }}>Currently in {monthNames[currentMonth]}</span>
+          <span style={{ fontSize: '11px', color: 'var(--text-muted)' }}>
+            {activeJobsCount} Active &bull; {closedJobsCount} Closed
+          </span>
         </div>
 
+        {/* Total Applicants */}
         <div className="glass-card" style={{ display: 'flex', flexDirection: 'column', gap: '8px' }}>
-          <span className="metric-label" style={{ fontSize: '11px', color: 'var(--text-muted)', textTransform: 'uppercase', letterSpacing: '0.08em', fontWeight: '700', fontFamily: 'var(--font-display)' }}>
-            Hiring Success Rate
+          <span style={{ fontSize: '10px', color: 'var(--text-muted)', textTransform: 'uppercase', letterSpacing: '0.08em', fontWeight: '700' }}>
+            Total Applicants
           </span>
-          <h2 className="metric-value" style={{ fontSize: '36px', fontWeight: '800', color: 'var(--accent-color)' }}>
-            {hiringSuccessRate}%
+          <h2 style={{ fontSize: '32px', fontWeight: '800', color: 'var(--primary-color)' }}>
+            {totalApplicantsCount}
           </h2>
-          <span style={{ fontSize: '11px', color: 'var(--text-muted)' }}>{selectedCount} selected / {processedCount} finalized</span>
+          <span style={{ fontSize: '11px', color: 'var(--text-muted)' }}>Applications submitted across all posts</span>
         </div>
 
+        {/* Pipeline Success counts */}
         <div className="glass-card" style={{ display: 'flex', flexDirection: 'column', gap: '8px' }}>
-          <span className="metric-label" style={{ fontSize: '11px', color: 'var(--text-muted)', textTransform: 'uppercase', letterSpacing: '0.08em', fontWeight: '700', fontFamily: 'var(--font-display)' }}>
-            Open Positions
+          <span style={{ fontSize: '10px', color: 'var(--text-muted)', textTransform: 'uppercase', letterSpacing: '0.08em', fontWeight: '700' }}>
+            Shortlisted & Hired
           </span>
-          <h2 className="metric-value" style={{ fontSize: '36px', fontWeight: '800', color: 'var(--success-color)' }}>
-            {openPositionsCount}
+          <h2 style={{ fontSize: '32px', fontWeight: '800', color: 'var(--success-color)' }}>
+            {shortlistedCount} / {hiredCount}
           </h2>
-          <span style={{ fontSize: '11px', color: 'var(--text-muted)' }}>Actively receiving resumes</span>
+          <span style={{ fontSize: '11px', color: 'var(--text-muted)' }}>
+            {shortlistedCount} Shortlisted &bull; {hiredCount} Hired candidates
+          </span>
         </div>
 
+        {/* Rejected candidates */}
         <div className="glass-card" style={{ display: 'flex', flexDirection: 'column', gap: '8px' }}>
-          <span className="metric-label" style={{ fontSize: '11px', color: 'var(--text-muted)', textTransform: 'uppercase', letterSpacing: '0.08em', fontWeight: '700', fontFamily: 'var(--font-display)' }}>
-            Most Applied Job
+          <span style={{ fontSize: '10px', color: 'var(--text-muted)', textTransform: 'uppercase', letterSpacing: '0.08em', fontWeight: '700' }}>
+            Rejected Candidates
           </span>
-          <h2 className="metric-value" style={{ fontSize: '16px', fontWeight: '800', color: 'var(--text-color)', whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis', marginTop: '16px' }}>
-            {mostAppliedJobTitle}
+          <h2 style={{ fontSize: '32px', fontWeight: '800', color: 'var(--danger-color)' }}>
+            {rejectedCount}
           </h2>
-          <span style={{ fontSize: '11px', color: 'var(--primary-color)', fontWeight: '600' }}>{mostAppliedJobCount} submissions received</span>
+          <span style={{ fontSize: '11px', color: 'var(--text-muted)' }}>Hiring funnel decision updates</span>
         </div>
       </div>
 
-      {/* Visual Charts section */}
-      <div style={{ display: 'grid', gridTemplateColumns: '1.6fr 1fr', gap: '30px' }} className="analytics-charts-grid">
+      {/* Top Performing Job & Success Rate Banner */}
+      <div style={{ display: 'grid', gridTemplateColumns: '1.2fr 1fr', gap: '25px' }} className="analytics-banner-grid">
         
-        {/* Trend line chart (Applications Trend) */}
-        <div className="glass-card" style={{ display: 'flex', flexDirection: 'column', gap: '20px' }}>
-          <h3 style={{ fontSize: '18px', fontWeight: '700', fontFamily: 'var(--font-display)' }}>Submission Pipeline Trend</h3>
-          
-          <div style={{ position: 'relative', width: '100%' }}>
-            {/* SVG Line Chart */}
-            <svg viewBox={`0 0 ${svgWidth} ${svgHeight}`} style={{ width: '100%', height: 'auto', overflow: 'visible' }}>
-              <defs>
-                <linearGradient id="chartGradient" x1="0" y1="0" x2="0" y2="1">
-                  <stop offset="0%" stopColor="var(--primary-color)" stopOpacity="0.25" />
-                  <stop offset="100%" stopColor="var(--primary-color)" stopOpacity="0" />
-                </linearGradient>
-              </defs>
-              
-              {/* Grid Lines */}
-              <line x1="20" y1="20" x2={svgWidth - 20} y2="20" stroke="var(--card-border)" strokeWidth="0.5" />
-              <line x1="20" y1="60" x2={svgWidth - 20} y2="60" stroke="var(--card-border)" strokeWidth="0.5" />
-              <line x1="20" y1="100" x2={svgWidth - 20} y2="100" stroke="var(--card-border)" strokeWidth="0.5" />
-              <line x1="20" y1="140" x2={svgWidth - 20} y2="140" stroke="var(--card-border)" strokeWidth="0.5" />
-
-              {/* Area fill */}
-              {points && (
-                <path
-                  d={`M 20,140 L ${points} L ${trendValues.length > 0 ? (trendValues.length - 1) / 5 * (svgWidth - 40) + 20 : 20},140 Z`}
-                  fill="url(#chartGradient)"
-                />
-              )}
-
-              {/* Trend line */}
-              {points && (
-                <polyline
-                  fill="none"
-                  stroke="var(--primary-color)"
-                  strokeWidth="3.5"
-                  points={points}
-                  style={{ filter: 'drop-shadow(0px 4px 10px rgba(0, 212, 255, 0.4))' }}
-                />
-              )}
-
-              {/* Data points dots */}
-              {trendValues.map((val, idx) => {
-                const x = (idx / 5) * (svgWidth - 40) + 20;
-                const y = svgHeight - (val / maxVal) * (svgHeight - 40) - 20;
-                return (
-                  <g key={idx}>
-                    <circle cx={x} cy={y} r="5" fill="#050816" stroke="var(--primary-color)" strokeWidth="2.5" />
-                    <text x={x} y={y - 10} textAnchor="middle" fill="var(--text-color)" fontSize="10" fontWeight="700">
-                      {val}
-                    </text>
-                  </g>
-                );
-              })}
-            </svg>
-            
-            {/* Axis labels */}
-            <div style={{ display: 'flex', justifyContent: 'space-between', padding: '10px 10px 0 10px', fontSize: '11px', color: 'var(--text-muted)' }}>
-              {trendLabels.map((label, idx) => (
-                <span key={idx} style={{ flex: 1, textAlign: 'center' }}>{label}</span>
-              ))}
-            </div>
+        {/* Top Performing Job */}
+        <div className="glass-card" style={{
+          display: 'flex',
+          gap: '16px',
+          alignItems: 'center',
+          background: 'linear-gradient(135deg, rgba(0, 212, 255, 0.03) 0%, rgba(139, 92, 246, 0.03) 100%)',
+          border: '1.5px solid rgba(0, 212, 255, 0.25)'
+        }}>
+          <div style={{
+            width: '48px',
+            height: '48px',
+            borderRadius: '12px',
+            background: 'rgba(0, 212, 255, 0.1)',
+            color: 'var(--primary-color)',
+            display: 'flex',
+            alignItems: 'center',
+            justifyContent: 'center',
+            flexShrink: 0
+          }}>
+            <svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><path d="M12 2l3.09 6.26L22 9.27l-5 4.87 1.18 6.88L12 17.77l-6.18 3.25L7 14.14 2 9.27l6.91-1.01L12 2z"></path></svg>
+          </div>
+          <div style={{ minWidth: 0 }}>
+            <span style={{ fontSize: '10px', color: 'var(--text-muted)', textTransform: 'uppercase', letterSpacing: '0.05em', fontWeight: '700' }}>
+              Top Performing Job Posting
+            </span>
+            <h3 style={{ fontSize: '18px', fontWeight: '800', margin: '4px 0', whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>
+              {topJobTitle}
+            </h3>
+            <span style={{ fontSize: '12px', color: 'var(--primary-color)', fontWeight: '600' }}>
+              {topJobCount} applications received
+            </span>
           </div>
         </div>
 
-        {/* Funnel distribution chart */}
-        <div className="glass-card" style={{ display: 'flex', flexDirection: 'column', gap: '24px', alignItems: 'center', justifyContent: 'center' }}>
-          <h3 style={{ fontSize: '17px', fontWeight: '700', fontFamily: 'var(--font-display)', width: '100%', textAlign: 'left' }}>
-            Application Pipeline
-          </h3>
-
-          <div style={{ position: 'relative', width: '130px', height: '130px', display: 'flex', alignItems: 'center', justifycontent: 'center' }}>
-            {/* SVG circle meter */}
-            <svg width="130" height="130" viewBox="0 0 36 36" style={{ transform: 'rotate(-90deg)' }}>
-              <circle cx="18" cy="18" r="15.915" fill="none" stroke="var(--card-border)" strokeWidth="3" />
-              <circle
-                cx="18" cy="18" r="15.915"
-                fill="none"
-                stroke="var(--accent-color)"
-                strokeWidth="3.5"
-                strokeDasharray={`${hiringSuccessRate} ${100 - hiringSuccessRate}`}
-                strokeLinecap="round"
-                style={{ filter: 'drop-shadow(0 0 4px rgba(139, 92, 246, 0.4))' }}
-              />
-            </svg>
-            <div style={{
-              position: 'absolute',
-              display: 'flex',
-              flexDirection: 'column',
-              alignItems: 'center',
-              justifyContent: 'center',
-              top: '50%',
-              left: '50%',
-              transform: 'translate(-50%, -50%)',
-            }}>
-              <span style={{ fontSize: '22px', fontWeight: '800', color: 'var(--text-color)', fontFamily: 'var(--font-display)' }}>
-                {hiringSuccessRate}%
-              </span>
-              <span style={{ fontSize: '9px', color: 'var(--text-muted)', textTransform: 'uppercase', letterSpacing: '0.05em', fontWeight: '600' }}>Success</span>
-            </div>
+        {/* Hired Success Rate */}
+        <div className="glass-card" style={{
+          display: 'flex',
+          gap: '16px',
+          alignItems: 'center',
+          background: 'linear-gradient(135deg, rgba(34, 197, 94, 0.03) 0%, rgba(0, 212, 255, 0.03) 100%)',
+          border: '1.5px solid rgba(34, 197, 94, 0.25)'
+        }}>
+          <div style={{
+            width: '48px',
+            height: '48px',
+            borderRadius: '12px',
+            background: 'rgba(34, 197, 94, 0.1)',
+            color: '#22C55E',
+            display: 'flex',
+            alignItems: 'center',
+            justifyContent: 'center',
+            flexShrink: 0
+          }}>
+            <svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><path d="M22 11.08V12a10 10 0 1 1-5.93-9.14"></path><polyline points="22 4 12 14.01 9 11.01"></polyline></svg>
           </div>
+          <div>
+            <span style={{ fontSize: '10px', color: 'var(--text-muted)', textTransform: 'uppercase', letterSpacing: '0.05em', fontWeight: '700' }}>
+              Decision Offer Acceptance Rate
+            </span>
+            <h3 style={{ fontSize: '20px', fontWeight: '800', margin: '2px 0', color: '#22C55E' }}>
+              {successRate}%
+            </h3>
+            <span style={{ fontSize: '11px', color: 'var(--text-muted)' }}>
+              Based on finalized hiring updates
+            </span>
+          </div>
+        </div>
 
-          {/* Breakdown description legend */}
-          <div style={{ display: 'flex', flexDirection: 'column', gap: '8px', width: '100%', fontSize: '13px' }}>
-            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
-              <div style={{ display: 'flex', gap: '6px', alignItems: 'center' }}>
-                <span style={{ width: '8px', height: '8px', borderRadius: '50%', background: 'var(--info-color)', display: 'inline-block' }} />
-                <span>Applied</span>
-              </div>
-              <span style={{ fontWeight: '700' }}>{applications.filter(a => a.status === 'Applied').length}</span>
-            </div>
-            
-            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
-              <div style={{ display: 'flex', gap: '6px', alignItems: 'center' }}>
-                <span style={{ width: '8px', height: '8px', borderRadius: '50%', background: 'var(--purple-color)', display: 'inline-block' }} />
-                <span>Under Review</span>
-              </div>
-              <span style={{ fontWeight: '700' }}>{applications.filter(a => a.status === 'Reviewed').length}</span>
-            </div>
+      </div>
 
-            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
-              <div style={{ display: 'flex', gap: '6px', alignItems: 'center' }}>
-                <span style={{ width: '8px', height: '8px', borderRadius: '50%', background: 'var(--warning-color)', display: 'inline-block' }} />
-                <span>Interviewing</span>
-              </div>
-              <span style={{ fontWeight: '700' }}>{applications.filter(a => a.status === 'Interview Scheduled').length}</span>
-            </div>
+      {/* Visual Funnel Chart section */}
+      <div style={{ display: 'grid', gridTemplateColumns: '1.6fr 1fr', gap: '30px' }} className="analytics-charts-grid">
+        
+        {/* Recharts Funnel bar representation */}
+        <div className="glass-card" style={{ display: 'flex', flexDirection: 'column', gap: '20px' }}>
+          <h3 style={{ fontSize: '18px', fontWeight: '700', fontFamily: 'var(--font-display)' }}>Hiring Conversion Funnel</h3>
+          <p style={{ color: 'var(--text-muted)', fontSize: '13px', margin: '-10px 0 10px 0' }}>
+            Breakdown of candidate progress across the ATS pipelines.
+          </p>
 
-            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
-              <div style={{ display: 'flex', gap: '6px', alignItems: 'center' }}>
-                <span style={{ width: '8px', height: '8px', borderRadius: '50%', background: 'var(--success-color)', display: 'inline-block' }} />
-                <span>Selected</span>
-              </div>
-              <span style={{ fontWeight: '700' }}>{selectedCount}</span>
-            </div>
+          <div style={{ width: '100%', height: '300px' }}>
+            <ResponsiveContainer width="100%" height="100%">
+              <BarChart
+                layout="vertical"
+                data={funnelData}
+                margin={{ top: 20, right: 30, left: 10, bottom: 5 }}
+              >
+                <CartesianGrid strokeDasharray="3 3" stroke="var(--card-border)" horizontal={false} />
+                <XAxis type="number" stroke="var(--text-muted)" fontSize={11} tickLine={false} />
+                <YAxis dataKey="name" type="category" stroke="var(--text-color)" fontSize={12} tickLine={false} width={130} />
+                <Tooltip 
+                  contentStyle={{
+                    background: 'var(--sidebar-bg)',
+                    border: '1.5px solid var(--card-border)',
+                    borderRadius: '8px',
+                    color: 'var(--text-color)'
+                  }}
+                />
+                <Bar dataKey="value" barSize={26} radius={[0, 6, 6, 0]}>
+                  {funnelData.map((entry, index) => (
+                    <Cell key={`cell-${index}`} fill={entry.color} />
+                  ))}
+                  <LabelList dataKey="value" position="right" style={{ fill: 'var(--text-color)', fontSize: '12px', fontWeight: '700' }} />
+                </Bar>
+              </BarChart>
+            </ResponsiveContainer>
+          </div>
+        </div>
+
+        {/* Funnel distribution chart stats */}
+        <div className="glass-card" style={{ display: 'flex', flexDirection: 'column', gap: '20px' }}>
+          <h3 style={{ fontSize: '17px', fontWeight: '700', fontFamily: 'var(--font-display)' }}>
+            Pipeline Distribution
+          </h3>
+          
+          <div style={{ display: 'flex', flexDirection: 'column', gap: '16px', marginTop: '10px' }}>
+            {funnelData.map((stage) => {
+              const pct = totalApplicantsCount > 0 ? Math.round((stage.value / totalApplicantsCount) * 100) : 0;
+              return (
+                <div key={stage.name} style={{ display: 'flex', flexDirection: 'column', gap: '6px' }}>
+                  <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', fontSize: '13px' }}>
+                    <div style={{ display: 'flex', gap: '8px', alignItems: 'center' }}>
+                      <span style={{ width: '10px', height: '10px', borderRadius: '50%', background: stage.color, display: 'inline-block' }} />
+                      <span style={{ fontWeight: '600' }}>{stage.name}</span>
+                    </div>
+                    <span style={{ fontWeight: '700' }}>
+                      {stage.value} <span style={{ color: 'var(--text-muted)', fontSize: '11px', fontWeight: '500' }}>({pct}%)</span>
+                    </span>
+                  </div>
+                  {/* Progress bar background wrapper */}
+                  <div style={{
+                    width: '100%',
+                    height: '6px',
+                    borderRadius: '3px',
+                    background: 'rgba(255,255,255,0.03)',
+                    border: '1.5px solid var(--card-border)',
+                    overflow: 'hidden'
+                  }}>
+                    <div style={{
+                      width: `${pct}%`,
+                      height: '100%',
+                      background: stage.color,
+                      borderRadius: '3px',
+                      transition: 'width 0.8s ease'
+                    }} />
+                  </div>
+                </div>
+              );
+            })}
           </div>
         </div>
 
@@ -294,7 +320,7 @@ export const Analytics = () => {
 
       <style>{`
         @media (max-width: 900px) {
-          .analytics-charts-grid {
+          .analytics-charts-grid, .analytics-banner-grid {
             grid-template-columns: 1fr !important;
           }
         }

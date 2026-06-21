@@ -3,11 +3,12 @@ import React, { useState, useEffect } from 'react';
 // Status badge class mapper
 const getStatusBadgeClass = (status) => {
   switch (status) {
-    case 'Selected':
+    case 'Hired':
       return 'badge-green';
     case 'Rejected':
       return 'badge-red';
-    case 'Reviewed':
+    case 'Shortlisted':
+      return 'badge-green';
     case 'Under Review':
       return 'badge-purple';
     case 'Interview Scheduled':
@@ -20,43 +21,32 @@ const getStatusBadgeClass = (status) => {
 
 // UI status text helper
 const getStatusLabel = (status) => {
-  if (status === 'Reviewed') return 'Under Review';
   return status;
 };
 
-export const ApplicationCard = ({ application, onDelete, isRecruiter = false, onStatusChange }) => {
+export const ApplicationCard = ({
+  application,
+  onDelete,
+  isRecruiter = false,
+  onStatusChange,
+  isSelected = false,
+  onSelect,
+  onOpenNotes,
+  onOpenInterview
+}) => {
   const { _id, fullName, email, phone, resumeLink, coverLetter, jobId, createdAt, status: dbStatus } = application;
   const [confirmDelete, setConfirmDelete] = useState(false);
   const [displayStatus, setDisplayStatus] = useState(dbStatus);
 
-  // Sync display status with overrides for 'Reviewed' vs 'Interview Scheduled'
+  // Sync display status with dbStatus
   useEffect(() => {
-    if (dbStatus === 'Reviewed') {
-      const overrides = JSON.parse(localStorage.getItem('app_status_overrides') || '{}');
-      setDisplayStatus(overrides[_id] || 'Reviewed');
-    } else {
-      setDisplayStatus(dbStatus);
-    }
-  }, [dbStatus, _id]);
+    setDisplayStatus(dbStatus);
+  }, [dbStatus]);
 
   const handleDropdownChange = async (e) => {
     const newStatus = e.target.value;
-    
-    // Save state overrides locally for the 'Interview Scheduled' exception
-    const overrides = JSON.parse(localStorage.getItem('app_status_overrides') || '{}');
-    if (newStatus === 'Interview Scheduled') {
-      overrides[_id] = 'Interview Scheduled';
-      localStorage.setItem('app_status_overrides', JSON.stringify(overrides));
-      // Notify parent using standard DB status 'Reviewed'
-      await onStatusChange(_id, 'Reviewed');
-      setDisplayStatus('Interview Scheduled');
-    } else {
-      delete overrides[_id];
-      localStorage.setItem('app_status_overrides', JSON.stringify(overrides));
-      // Notify parent with the database compliant status
-      await onStatusChange(_id, newStatus);
-      setDisplayStatus(newStatus);
-    }
+    setDisplayStatus(newStatus);
+    await onStatusChange(_id, newStatus);
   };
 
   const formatDate = (dateString) => {
@@ -75,17 +65,36 @@ export const ApplicationCard = ({ application, onDelete, isRecruiter = false, on
       justifyContent: 'space-between',
       gap: '20px',
       height: '100%',
+      border: isSelected ? '1px solid var(--primary-color)' : '1px solid var(--card-border)',
+      boxShadow: isSelected ? '0 0 15px rgba(0, 212, 255, 0.15)' : 'none',
+      transition: 'var(--transition-smooth)'
     }}>
       <div>
         {/* Header: Candidate details & Badge */}
         <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', gap: '15px' }}>
-          <div>
-            <h3 style={{ fontSize: '18px', fontWeight: '700', color: 'var(--text-color)', fontFamily: 'var(--font-display)' }}>
-              {fullName}
-            </h3>
-            <span style={{ fontSize: '12px', color: 'var(--text-muted)' }}>
-              Applied on {formatDate(createdAt)}
-            </span>
+          <div style={{ display: 'flex', gap: '12px', alignItems: 'flex-start' }}>
+            {isRecruiter && onSelect && (
+              <input
+                type="checkbox"
+                checked={isSelected}
+                onChange={(e) => onSelect(_id, e.target.checked)}
+                style={{
+                  marginTop: '5px',
+                  width: '16px',
+                  height: '16px',
+                  cursor: 'pointer',
+                  accentColor: 'var(--primary-color)'
+                }}
+              />
+            )}
+            <div>
+              <h3 style={{ fontSize: '18px', fontWeight: '700', color: 'var(--text-color)', fontFamily: 'var(--font-display)' }}>
+                {fullName}
+              </h3>
+              <span style={{ fontSize: '12px', color: 'var(--text-muted)' }}>
+                Applied on {formatDate(createdAt)}
+              </span>
+            </div>
           </div>
 
           <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'flex-end', gap: '6px' }}>
@@ -199,11 +208,34 @@ export const ApplicationCard = ({ application, onDelete, isRecruiter = false, on
               }}
             >
               <option value="Applied">Applied</option>
-              <option value="Reviewed">Under Review</option>
+              <option value="Under Review">Under Review</option>
+              <option value="Shortlisted">Shortlisted</option>
               <option value="Interview Scheduled">Interview Scheduled</option>
-              <option value="Selected">Selected</option>
+              <option value="Hired">Hired</option>
               <option value="Rejected">Rejected</option>
             </select>
+          </div>
+        )}
+
+        {/* Notes & Interview Buttons */}
+        {isRecruiter && (
+          <div style={{ display: 'flex', gap: '8px', marginTop: '12px' }}>
+            <button
+              onClick={() => onOpenNotes(_id, fullName)}
+              className="btn-secondary"
+              style={{ padding: '6px 12px', fontSize: '12px', display: 'flex', alignItems: 'center', gap: '6px', flex: 1, justifyContent: 'center' }}
+            >
+              <svg xmlns="http://www.w3.org/2000/svg" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"></path><polyline points="14 2 14 8 20 8"></polyline><line x1="16" y1="13" x2="8" y2="13"></line><line x1="16" y1="17" x2="8" y2="17"></line></svg>
+              Notes
+            </button>
+            <button
+              onClick={() => onOpenInterview(_id, fullName)}
+              className="btn-secondary"
+              style={{ padding: '6px 12px', fontSize: '12px', display: 'flex', alignItems: 'center', gap: '6px', flex: 1, justifyContent: 'center' }}
+            >
+              <svg xmlns="http://www.w3.org/2000/svg" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><rect x="3" y="4" width="18" height="18" rx="2" ry="2"></rect><line x1="16" y1="2" x2="16" y2="6"></line><line x1="8" y1="2" x2="8" y2="6"></line><line x1="3" y1="10" x2="21" y2="10"></line></svg>
+              Interview
+            </button>
           </div>
         )}
       </div>

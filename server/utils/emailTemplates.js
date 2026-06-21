@@ -335,10 +335,115 @@ const getStatusUpdateEmail = (candidateName, jobTitle, company, previousStatus, 
   return getCommonLayout('Application Status Updated', content, ctaText, ctaLink, accentColor);
 };
 
+const getInterviewScheduledEmail = (candidateName, jobTitle, company, date, time, mode, meetingLink, remarks) => {
+  const content = `
+    <h1 class="h1">Interview Scheduled</h1>
+    <p class="paragraph">Hello <strong>${candidateName}</strong>,</p>
+    <p class="paragraph">An interview has been scheduled for your application for the <strong>${jobTitle}</strong> position at <strong>${company}</strong>.</p>
+    <div class="table-container">
+      <table class="info-table">
+        <tr>
+          <td class="info-label">Date</td>
+          <td class="info-value"><strong>${date}</strong></td>
+        </tr>
+        <tr>
+          <td class="info-label">Time</td>
+          <td class="info-value">${time}</td>
+        </tr>
+        <tr>
+          <td class="info-label">Mode</td>
+          <td class="info-value"><span style="color: #F59E0B; font-weight: 700;">${mode}</span></td>
+        </tr>
+        ${meetingLink ? `
+        <tr>
+          <td class="info-label">Meeting Link</td>
+          <td class="info-value"><a href="${meetingLink}" style="color: #8B5CF6; text-decoration: none;">${meetingLink}</a></td>
+        </tr>` : ''}
+        ${remarks ? `
+        <tr>
+          <td class="info-label">Remarks</td>
+          <td class="info-value">${remarks}</td>
+        </tr>` : ''}
+      </table>
+    </div>
+  `;
+  return getCommonLayout('Interview Scheduled', content, meetingLink ? 'Join Meeting' : 'View Application', meetingLink || `${process.env.CLIENT_URL || 'http://localhost:5173'}/my-applications`, '#F59E0B');
+};
+
+const getInterviewUpdatedEmail = (candidateName, jobTitle, company, date, time, mode, meetingLink, remarks) => {
+  const content = `
+    <h1 class="h1">Interview Schedule Updated</h1>
+    <p class="paragraph">Hello <strong>${candidateName}</strong>,</p>
+    <p class="paragraph">The schedule details for your <strong>${jobTitle}</strong> interview at <strong>${company}</strong> have been updated.</p>
+    <div class="table-container">
+      <table class="info-table">
+        <tr>
+          <td class="info-label">Date</td>
+          <td class="info-value"><strong>${date}</strong></td>
+        </tr>
+        <tr>
+          <td class="info-label">Time</td>
+          <td class="info-value">${time}</td>
+        </tr>
+        <tr>
+          <td class="info-label">Mode</td>
+          <td class="info-value"><span style="color: #F59E0B; font-weight: 700;">${mode}</span></td>
+        </tr>
+        ${meetingLink ? `
+        <tr>
+          <td class="info-label">Meeting Link</td>
+          <td class="info-value"><a href="${meetingLink}" style="color: #8B5CF6; text-decoration: none;">${meetingLink}</a></td>
+        </tr>` : ''}
+        ${remarks ? `
+        <tr>
+          <td class="info-label">Remarks</td>
+          <td class="info-value">${remarks}</td>
+        </tr>` : ''}
+      </table>
+    </div>
+  `;
+  return getCommonLayout('Interview Schedule Updated', content, meetingLink ? 'Join Meeting' : 'View Application', meetingLink || `${process.env.CLIENT_URL || 'http://localhost:5173'}/my-applications`, '#F59E0B');
+};
+
+const getInterviewCancelledEmail = (candidateName, jobTitle, company) => {
+  const content = `
+    <h1 class="h1" style="color: #EF4444;">Interview Cancelled</h1>
+    <p class="paragraph">Hello <strong>${candidateName}</strong>,</p>
+    <p class="paragraph">Please note that the interview scheduled for your application for the <strong>${jobTitle}</strong> position at <strong>${company}</strong> has been cancelled.</p>
+    <p class="paragraph">The hiring team will contact you if they decide to reschedule or need further details.</p>
+  `;
+  return getCommonLayout('Interview Cancelled', content, 'Browse Jobs', `${process.env.CLIENT_URL || 'http://localhost:5173'}/jobs`, '#EF4444');
+};
+
+const getHiringDecisionEmail = (candidateName, jobTitle, company, decision) => {
+  const isHired = decision.toLowerCase() === 'hired';
+  const accentColor = isHired ? '#22C55E' : '#64748B';
+  const title = isHired ? 'Congratulations! Job Offer' : 'Application Update';
+  
+  const content = isHired ? `
+    <h1 class="h1" style="color: #22C55E;">🎉 Congratulations!</h1>
+    <p class="paragraph">Hello <strong>${candidateName}</strong>,</p>
+    <p class="paragraph">We are thrilled to inform you that you have been selected for the <strong>${jobTitle}</strong> position at <strong>${company}</strong>!</p>
+    <p class="paragraph">The recruitment team will reach out to you shortly with the job offer details, contract documentation, and onboarding steps.</p>
+  ` : `
+    <h1 class="h1">Application Status Update</h1>
+    <p class="paragraph">Hello <strong>${candidateName}</strong>,</p>
+    <p class="paragraph">Thank you for taking the time to apply and interview for the <strong>${jobTitle}</strong> position at <strong>${company}</strong>.</p>
+    <p class="paragraph">Unfortunately, after careful review, the hiring team has decided to proceed with other candidates at this time.</p>
+    <p class="paragraph">We were impressed with your skills and will keep your profile in our database for future opportunities that match your background.</p>
+  `;
+  
+  return getCommonLayout(title, content, isHired ? 'View Offer Details' : 'Browse Other Jobs', isHired ? `${process.env.CLIENT_URL || 'http://localhost:5173'}/my-applications` : `${process.env.CLIENT_URL || 'http://localhost:5173'}/jobs`, accentColor);
+};
+
 module.exports = {
   getWelcomeEmail,
   getOTPEmail,
   getRecruiterNotificationEmail,
   getCandidateConfirmationEmail,
-  getStatusUpdateEmail
+  getStatusUpdateEmail,
+  getInterviewScheduledEmail,
+  getInterviewUpdatedEmail,
+  getInterviewCancelledEmail,
+  getHiringDecisionEmail
 };

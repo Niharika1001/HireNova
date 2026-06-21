@@ -1,6 +1,6 @@
 import React, { useState, useEffect } from 'react';
 import { Link } from 'react-router-dom';
-import { getDashboardStats, getApplications, getJobs } from '../services/api';
+import { getDashboardStats, getApplications, getJobs, getActivityLogs } from '../services/api';
 import { useAuth } from '../context/AuthContext';
 import DashboardCard from '../components/DashboardCard';
 import { DashboardCardSkeleton } from '../components/Loader';
@@ -11,6 +11,7 @@ export const Dashboard = () => {
   const [stats, setStats] = useState(null);
   const [applications, setApplications] = useState([]);
   const [recruiterJobs, setRecruiterJobs] = useState([]);
+  const [activities, setActivities] = useState([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState(null);
 
@@ -27,6 +28,10 @@ export const Dashboard = () => {
         // Fetch all jobs created by this recruiter to calculate status breakdowns
         const jobsData = await getJobs({ recruiterId: user._id });
         setRecruiterJobs(jobsData);
+
+        // Fetch recent recruiter activities
+        const logsData = await getActivityLogs();
+        setActivities(logsData);
       } catch (err) {
         console.error('Error fetching dashboard metrics:', err);
         setError('Could not load recruiter dashboard analytics.');
@@ -75,7 +80,7 @@ export const Dashboard = () => {
   const openJobs = recruiterJobs.filter(j => j.status === 'Open').length;
   const closedJobs = recruiterJobs.filter(j => j.status === 'Closed').length;
   const totalApplications = applications.length;
-  const selectedCandidates = applications.filter(app => app.status === 'Selected').length;
+  const selectedCandidates = applications.filter(app => app.status === 'Hired' || app.status === 'Selected').length;
 
   // Recent jobs posted (limit to 5)
   const recentJobs = recruiterJobs
@@ -136,7 +141,7 @@ export const Dashboard = () => {
           icon={<svg xmlns="http://www.w3.org/2000/svg" width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"></path><polyline points="14 2 14 8 20 8"></polyline><line x1="16" y1="13" x2="8" y2="13"></line><line x1="16" y1="17" x2="8" y2="17"></line></svg>}
         />
         <DashboardCard
-          title="Selected Candidates"
+          title="Hired Candidates"
           value={selectedCandidates}
           accentColor="secondary"
           icon={<svg xmlns="http://www.w3.org/2000/svg" width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><path d="M22 11.08V12a10 10 0 1 1-5.93-9.14"></path><polyline points="22 4 12 14.01 9 11.01"></polyline></svg>}
@@ -195,23 +200,21 @@ export const Dashboard = () => {
           )}
         </div>
 
-        {/* Recent Applications Activity Summary */}
+        {/* Recent Activity Feed */}
         <div className="glass-card" style={{ display: 'flex', flexDirection: 'column', gap: '20px' }}>
           <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
             <h3 style={{ fontSize: '18px', fontWeight: '700', fontFamily: 'var(--font-display)' }}>Recent Activity</h3>
-            <Link to="/applications" style={{ fontSize: '13px', color: 'var(--primary-color)', fontWeight: '600' }}>
-              View All
-            </Link>
+            <span style={{ fontSize: '11px', color: 'var(--primary-color)', fontWeight: '700', background: 'rgba(0, 212, 255, 0.06)', padding: '4px 8px', borderRadius: '4px' }}>Latest 10</span>
           </div>
 
-          {applications.length > 0 ? (
-            <div style={{ display: 'flex', flexDirection: 'column', gap: '16px' }}>
-              {applications.slice(0, 4).map((app) => (
-                <div key={app._id} style={{
+          {activities.length > 0 ? (
+            <div style={{ display: 'flex', flexDirection: 'column', gap: '14px', maxHeight: '380px', overflowY: 'auto', paddingRight: '4px' }}>
+              {activities.map((act) => (
+                <div key={act._id} style={{
                   display: 'flex',
                   gap: '12px',
                   alignItems: 'center',
-                  padding: '10px',
+                  padding: '10px 12px',
                   borderRadius: '8px',
                   background: 'rgba(255, 255, 255, 0.01)',
                   border: '1px solid var(--card-border)'
@@ -219,34 +222,30 @@ export const Dashboard = () => {
                   <div style={{
                     width: '32px',
                     height: '32px',
-                    borderRadius: '50%',
-                    background: 'rgba(0, 212, 255, 0.1)',
+                    borderRadius: '8px',
+                    background: 'rgba(0, 212, 255, 0.08)',
                     color: 'var(--primary-color)',
                     display: 'flex',
                     alignItems: 'center',
                     justifyContent: 'center',
                     fontWeight: '700',
-                    fontSize: '12px'
+                    fontSize: '14px',
+                    flexShrink: 0
                   }}>
-                    {app.fullName.charAt(0).toUpperCase()}
+                    <svg xmlns="http://www.w3.org/2000/svg" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5"><path d="M20.24 12.24a6 6 0 0 0-8.49-8.49L5 10.5V19h8.5z"></path><line x1="16" y1="8" x2="2" y2="22"></line><line x1="17.5" y1="15" x2="9" y2="15"></line></svg>
                   </div>
                   <div style={{ flex: 1, minWidth: 0 }}>
-                    <h4 style={{ fontSize: '13px', fontWeight: '700', whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>{app.fullName}</h4>
-                    <span style={{ fontSize: '11px', color: 'var(--text-muted)' }}>Applied for {app.jobId?.title || 'Deleted Job'}</span>
+                    <h4 style={{ fontSize: '13px', fontWeight: '600', lineHeight: '1.4', color: 'var(--text-color)', margin: 0 }}>{act.message}</h4>
+                    <span style={{ fontSize: '11px', color: 'var(--text-muted)' }}>
+                      {new Date(act.timestamp).toLocaleDateString('en-US', { month: 'short', day: 'numeric', hour: '2-digit', minute: '2-digit' })}
+                    </span>
                   </div>
-                  <span className={`badge ${
-                    app.status === 'Selected' ? 'badge-green' :
-                    app.status === 'Rejected' ? 'badge-red' :
-                    app.status === 'Reviewed' ? 'badge-purple' : 'badge-blue'
-                  }`} style={{ fontSize: '8px', padding: '2px 6px' }}>
-                    {app.status === 'Reviewed' ? 'Under Review' : app.status}
-                  </span>
                 </div>
               ))}
             </div>
           ) : (
-            <div style={{ textAlign: 'center', padding: '30px', color: 'var(--text-muted)', fontSize: '14px' }}>
-              No recent application submissions received yet.
+            <div style={{ textAlign: 'center', padding: '45px 10px', color: 'var(--text-muted)', fontSize: '14px' }}>
+              No recruitment activity logged yet.
             </div>
           )}
         </div>

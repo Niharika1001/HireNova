@@ -4,7 +4,11 @@ const {
   getOTPEmail,
   getRecruiterNotificationEmail,
   getCandidateConfirmationEmail,
-  getStatusUpdateEmail
+  getStatusUpdateEmail,
+  getInterviewScheduledEmail,
+  getInterviewUpdatedEmail,
+  getInterviewCancelledEmail,
+  getHiringDecisionEmail
 } = require('./emailTemplates');
 
 // Lazy initialize transporter to prevent crashes if credentials are temporarily missing during app boot
@@ -94,10 +98,47 @@ const sendStatusUpdateEmail = async (candidateEmail, candidateName, jobTitle, co
   return await deliverMail(candidateEmail, 'Application Status Updated', html);
 };
 
+/**
+ * Interview Scheduled Email Trigger
+ */
+const sendInterviewScheduledEmail = async (toEmail, candidateName, jobTitle, company, date, time, mode, meetingLink, remarks) => {
+  const html = getInterviewScheduledEmail(candidateName, jobTitle, company, date, time, mode, meetingLink, remarks);
+  return await deliverMail(toEmail, 'Interview Scheduled - HireNova', html);
+};
+
+/**
+ * Interview Updated Email Trigger
+ */
+const sendInterviewUpdatedEmail = async (toEmail, candidateName, jobTitle, company, date, time, mode, meetingLink, remarks) => {
+  const html = getInterviewUpdatedEmail(candidateName, jobTitle, company, date, time, mode, meetingLink, remarks);
+  return await deliverMail(toEmail, 'Interview Schedule Updated - HireNova', html);
+};
+
+/**
+ * Interview Cancelled Email Trigger
+ */
+const sendInterviewCancelledEmail = async (toEmail, candidateName, jobTitle, company) => {
+  const html = getInterviewCancelledEmail(candidateName, jobTitle, company);
+  return await deliverMail(toEmail, 'Interview Cancelled - HireNova', html);
+};
+
+/**
+ * Hiring Decision Email Trigger
+ */
+const sendHiringDecisionEmail = async (toEmail, candidateName, jobTitle, company, decision) => {
+  const html = getHiringDecisionEmail(candidateName, jobTitle, company, decision);
+  const subject = decision.toLowerCase() === 'hired' ? 'Job Offer - HireNova' : 'Application Update - HireNova';
+  return await deliverMail(toEmail, subject, html);
+};
+
 module.exports = {
   sendWelcomeEmail,
   sendOTPEmail,
   sendRecruiterNotification,
   sendCandidateConfirmation,
-  sendStatusUpdateEmail
+  sendStatusUpdateEmail,
+  sendInterviewScheduledEmail,
+  sendInterviewUpdatedEmail,
+  sendInterviewCancelledEmail,
+  sendHiringDecisionEmail
 };

@@ -34,8 +34,8 @@ const applicationSchema = new mongoose.Schema({
     type: String,
     required: [true, 'Application status is required'],
     enum: {
-      values: ['Applied', 'Reviewed', 'Selected', 'Rejected'],
-      message: 'Status must be Applied, Reviewed, Selected, or Rejected',
+      values: ['Applied', 'Under Review', 'Shortlisted', 'Interview Scheduled', 'Rejected', 'Hired'],
+      message: 'Status must be Applied, Under Review, Shortlisted, Interview Scheduled, Rejected, or Hired',
     },
     default: 'Applied',
   },

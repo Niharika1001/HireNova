@@ -1,5 +1,6 @@
 const Job = require('../models/Job');
 const Application = require('../models/Application');
+const { logActivity } = require('../utils/activityLogger');
 
 // @desc    Get all jobs with searching, filtering, and sorting
 // @route   GET /api/jobs
@@ -95,6 +96,9 @@ const createJob = async (req, res, next) => {
       status: 'Open' // Defaults to open listing
     });
 
+    // Log Activity
+    await logActivity(req.user._id, `Created ${job.title} Job`);
+
     res.status(201).json(job);
   } catch (error) {
     next(error);
@@ -125,6 +129,8 @@ const updateJob = async (req, res, next) => {
       skillsArray = skills.split(',').map(skill => skill.trim()).filter(Boolean);
     }
 
+    const previousStatus = job.status;
+
     job.title = title || job.title;
     job.company = company || job.company;
     job.location = location || job.location;
@@ -135,6 +141,16 @@ const updateJob = async (req, res, next) => {
     job.status = status || job.status; // Supports Open and Closed transitions
 
     const updatedJob = await job.save();
+
+    // Log Activity if status changed
+    if (status && status !== previousStatus) {
+      if (status === 'Closed') {
+        await logActivity(req.user._id, `Closed ${job.title} Job`);
+      } else if (status === 'Open' || status === 'Reopen') {
+        await logActivity(req.user._id, `Reopened ${job.title} Job`);
+      }
+    }
+
     res.status(200).json(updatedJob);
   } catch (error) {
     next(error);
@@ -161,6 +177,9 @@ const deleteJob = async (req, res, next) => {
     // Soft Delete: change status field instead of physically deleting from collection
     job.status = 'Deleted';
     await job.save();
+
+    // Log Activity
+    await logActivity(req.user._id, `Archived ${job.title} Job`);
 
     res.status(200).json({ message: 'Job listing status updated to Deleted successfully.' });
   } catch (error) {
