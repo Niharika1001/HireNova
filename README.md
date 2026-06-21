@@ -10,8 +10,6 @@ Designed to replicate high-end recruitment SaaS platforms like Linear and Stripe
 
 - [Project Overview](#project-overview)
 - [Key Features](#key-features)
-  - [Assignment 1 & 2 Core Features](#assignment-1--2-core-features)
-  - [Assignment 3 ATS Features](#assignment-3-ats-features)
 - [Hiring Pipeline & Job Lifecycle](#hiring-pipeline--job-lifecycle)
 - [Tech Stack](#tech-stack)
 - [Database Documentation](#database-documentation)
@@ -23,29 +21,47 @@ Designed to replicate high-end recruitment SaaS platforms like Linear and Stripe
 
 ## Project Overview
 
-HireNova transforms traditional candidate applications into an automated, interactive Applicant Tracking System. Recruiters can manage job lifecycles, monitor applications via advanced multi-variable search and filters, write confidential notes, schedule multi-mode interviews, track logs in a recent activity feed, bulk transition candidates, and export reports to CSV. Candidates can search and apply to jobs, track their submission timelines, and save jobs to their dashboard.
+HireNova transforms traditional candidate applications into an interactive, automated Applicant Tracking System (ATS). Recruiters can manage job lifecycles, monitor applications via advanced multi-variable search and filters, write confidential notes, schedule multi-mode interviews, track recruiter logs in a recent activity feed, bulk transition candidates, and export reports to CSV. Candidates can search and apply to jobs, track their submission timelines, and save jobs to their dashboard.
 
 ---
 
 ## Key Features
 
-### Assignment 1 & 2 Core Features
-* **JWT Authentication & Security**: Secure token-based session persistence. Cryptographic hashing using bcryptjs. Role-based Route Guards.
+### 🔐 Authentication & Security
+* **Dual Role Onboarding**: Dedicated signup and role-specific workspace flows for Recruiters and Candidates.
+* **JWT Session Persistence**: Secure, token-based session management stored locally.
 * **OTP Verification**: Multi-step registration and login verification using one-time password security tokens.
-* **Job Board Operations**: Recruiters can post, update, close, and delete job listings. Candidates can view details and submit applications with Base64 profile data.
-* **Candidate Saved Jobs**: Bookmark opportunities to a saved jobs list.
-* **Premium UI Styling**: Collapsible sidebar, bottom navigation on mobile viewports, theme toggle (Dark Glassmorphism / Slate Light Mode), and custom loading skeletons.
+* **Role-Based Route Guards**: Enforced permissions at both the React frontend routing and backend middleware layers.
+* **Cryptographic Hashing**: Secure password encryption utilizing `bcryptjs` hashing.
 
-### Assignment 3 ATS Features
+### 💼 Recruiter ATS Workflows
 * **Advanced Applicant Management**: View Candidate Name, Email, Phone, Resume, Applied Date, and Pipeline Status for every job posting. Multi-variable search (case-insensitive name/email search) and status filters.
-* **Full Hiring Pipeline**: Replaced static status mappings with a Mongoose enum representing progression through stages (`Applied` -> `Under Review` -> `Shortlisted` -> `Interview Scheduled` -> `Hired` or `Rejected`).
 * **Recruiter Notes**: Write, edit, and delete confidential candidate evaluations visible only to recruiting staff.
 * **Interview Scheduling**: Schedule, update, and cancel Online (adds video link) or Offline interviews. Sends customized email notifications to candidates.
 * **Recent Activity Feed**: Tracks recruiter dashboard logs (Create Job, Archive Job, Reopen Job, Status Updated, Interview Scheduled, Interview Cancelled, Candidate Hired, Candidate Rejected) showing the latest 10 events.
-* **Enhanced Recruitment Analytics**: Analytics dashboard displaying Job Postings metrics (Total, Active, Closed), Applicant volume, success rate, Top Performing Job (highest applications count), and a Recharts pipeline conversion funnel.
 * **Bulk Candidate Actions**: Select multiple applicants and transition their statuses simultaneously.
 * **CSV Applicant Export**: Export candidate databases (Name, Email, Phone, Status, Applied Date) as CSV reports.
+
+### 🧑‍💻 Candidate Workspace Workflows
+* **Adaptive Search**: Query job listings by keyword, location, and employment type concurrently.
+* **Interactive Job Details**: Detail views with floating action panels and instant apply modal options.
+* **Application History**: Track submission timelines and current statuses in real-time.
+* **Saved Jobs**: Bookmark job listings to a personal saved jobs checklist.
+* **Profile Settings**: Maintain personal details, skills, and links with Base64 profile picture uploads.
+
+### 📊 Recruiting Analytics & Visualizations
+* **Recruiter Analytics Dashboard**: Tracks metrics (Total, Active, and Closed Job counts) along with Candidate pipelines (Shortlisted, Hired, and Rejected counts).
+* **Top Performing Job Metric**: Identifies and highlights the job posting with the highest applicant traffic.
+* **Hiring Conversion Funnel**: Fully integrated Recharts vertical bar chart displaying conversion throughput across applicant pipeline stages.
+
+### ✉️ Email Notifications System
 * **Nodemailer Integrations**: Automated dispatch of Interview Scheduled, Interview Updated, Interview Cancelled, and Hiring Decision (Hired/Rejected) notifications.
+
+### 🎨 Premium UI/UX Styling
+* **Theme Customization**: Responsive toggling between Dark Glassmorphic (glow states, translucent borders) and Light (high-contrast elevation) themes.
+* **Compact Density Layout**: Professional 13px base styling layout.
+* **Loading Skeletons**: Fluid placeholder animations replacing traditional spinners during async network operations.
+* **Collapsible Navigation**: Collapsible sidebar navigation for desktops and bottom-tab navigation for mobile screens.
 
 ---
 
